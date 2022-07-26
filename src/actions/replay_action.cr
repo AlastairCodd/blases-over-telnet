@@ -1,6 +1,7 @@
 require "colorize"
 require "http/client"
 require "json"
+require "../sources/historic_source.cr"
 require "../client.cr"
 require "./base.cr"
 

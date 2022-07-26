@@ -6,6 +6,7 @@ require "./playback_actions.cr"
 require "./replay_action.cr"
 require "./stlats_action.cr"
 require "./display_action.cr"
+require "./standings_action.cr"
 
 def get_actions : Hash(String, Action)
   actions = [
@@ -17,6 +18,8 @@ def get_actions : Hash(String, Action)
     StlatsAction.new,
     ClearAction.new,
     DisplayAction.new,
+    StandingsAction.new,
+    RunDifferentialAction.new,
   ]
 
   actions_by_aliases = actions
