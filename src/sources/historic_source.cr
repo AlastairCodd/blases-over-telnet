@@ -198,7 +198,7 @@ class ChroniclerSource < Source
       if new_zero_indexed_day == @current_zero_indexed_day
         return DataChangeStatus::NoChanges
       end
-      
+
       Log.trace &.emit "\tupdated day (0-indexed)", ident: @ident, old_zero_indexed_day: @current_zero_indexed_day, new_zero_indexed_day: new_zero_indexed_day
       @current_zero_indexed_day = new_zero_indexed_day
       @current_season = pending_sim.not_nil!["season"].as_i
@@ -237,30 +237,37 @@ class ChroniclerSource < Source
     is_first_time = @current_games.size == 0
 
     @historic_games.each do |game_id, updates_for_game|
+      if updates_for_game.size == 0
+        next
+      end
+
       Log.trace { "incrementing current data for game #{game_id}, current number of updates #{updates_for_game.size}" }
-      if updates_for_game.size > 0
-        time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
+      time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
 
-        Log.trace &.emit "there are updates for game", time_of_next_update: time_of_next_update, current_time: @current_time
+      Log.trace &.emit "there are updates for game", time_of_next_update: time_of_next_update, current_time: @current_time
 
-        if is_first_time || time_of_next_update <= @current_time
-          @current_games[game_id] = updates_for_game.shift
+      if is_first_time || time_of_next_update <= @current_time
+        @current_games[game_id] = updates_for_game.shift
 
-          # i have no idea how this is going to work with cancelled games in s24. s24 my beloathed
-          # turns out fine. those games _did_ start, weirdly
-          while !@current_games[game_id]["data"]["gameStart"].as_bool && updates_for_game.size > 0
-            Log.info &.emit "Discarding update for game, bcs game hasn't started yet", game_id: game_id, timestamp: time_of_next_update
-
-            Log.trace { "\tremoving game update #{game_id}/#{time_of_next_update} in update_game_event_for_all_ongoing_games because timestamp in the past" }
-            @current_games[game_id] = updates_for_game.shift
-            time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse @current_games[game_id]["timestamp"].as_s
-          end
-
-          Log.info &.emit "Pushing update for game", game_id: game_id, timestamp: time_of_next_update, next_timestamp: Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
-          Log.trace &.emit "\tRemaining updates", game_id: game_id, number_of_updates: updates_for_game.size
-
-          any_games_updated = true
+        if @current_games[game_id]["data"]["gameComplete"].as_bool || updates_for_game.size == 0
+          Log.info &.emit "Pushing final update for game", game_id: game_id, timestamp: time_of_next_update
+          next
         end
+
+        # i have no idea how this is going to work with cancelled games in s24. s24 my beloathed
+        # turns out fine. those games _did_ start, weirdly
+        while !@current_games[game_id]["data"]["gameStart"].as_bool && updates_for_game.size > 0
+          Log.info &.emit "Discarding update for game, bcs game hasn't started yet", game_id: game_id, timestamp: time_of_next_update
+
+          Log.trace { "\tremoving game update #{game_id}/#{time_of_next_update} in update_game_event_for_all_ongoing_games because timestamp in the past" }
+          @current_games[game_id] = updates_for_game.shift
+          time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse @current_games[game_id]["timestamp"].as_s
+        end
+
+        Log.info &.emit "Pushing update for game", game_id: game_id, timestamp: time_of_next_update, next_timestamp: Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
+        Log.trace &.emit "\tRemaining updates", game_id: game_id, number_of_updates: updates_for_game.size
+
+        any_games_updated = true
       end
     end
 
