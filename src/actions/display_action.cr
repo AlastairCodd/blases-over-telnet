@@ -1,4 +1,4 @@
-DEFAULT_COLUMN_WIDTH = 65_u16
+DEFAULT_COLUMN_WIDTH = 75_u16
 
 class DisplayAction < Action
   getter aliases : Set(String) = Set{"display"}
