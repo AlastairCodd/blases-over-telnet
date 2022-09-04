@@ -141,7 +141,6 @@ class ChroniclerSource < Source
             Log.trace { "\tnot removing game updates #{game_id}/#{next_update_timestamp}" }
           else
             while next_update_timestamp <= @current_time
-              Log.trace { "\tremoving game update #{game_id}/#{next_update_timestamp} in get_time_next_data_expires because timestamp in the past" }
               removed_update = game_updates.shift
               if game_updates.size == 0
                 Log.info &.emit "Removed final update for game", game_id: game_id, timestamp: next_update_timestamp, game_finished: removed_update["data"]["gameComplete"].as_bool
@@ -254,18 +253,28 @@ class ChroniclerSource < Source
           next
         end
 
+        while time_of_next_update < @current_time && updates_for_game.size > 0
+          Log.info &.emit "Discarding update for game, bcs update happened in the past", game_id: game_id, timestamp: time_of_next_update
+
+          @current_games[game_id] = updates_for_game.shift
+          time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse @current_games[game_id]["timestamp"].as_s
+        end
+
         # i have no idea how this is going to work with cancelled games in s24. s24 my beloathed
         # turns out fine. those games _did_ start, weirdly
         while !@current_games[game_id]["data"]["gameStart"].as_bool && updates_for_game.size > 0
           Log.info &.emit "Discarding update for game, bcs game hasn't started yet", game_id: game_id, timestamp: time_of_next_update
 
-          Log.trace { "\tremoving game update #{game_id}/#{time_of_next_update} in update_game_event_for_all_ongoing_games because timestamp in the past" }
           @current_games[game_id] = updates_for_game.shift
           time_of_next_update = Time::Format::ISO_8601_DATE_TIME.parse @current_games[game_id]["timestamp"].as_s
         end
 
-        Log.info &.emit "Pushing update for game", game_id: game_id, timestamp: time_of_next_update, next_timestamp: Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
-        Log.trace &.emit "\tRemaining updates", game_id: game_id, number_of_updates: updates_for_game.size
+        if updates_for_game.size == 0
+          Log.info &.emit "Pushing final update for game", game_id: game_id, timestamp: time_of_next_update
+        else
+          Log.info &.emit "Pushing update for game", game_id: game_id, timestamp: time_of_next_update, next_timestamp: Time::Format::ISO_8601_DATE_TIME.parse updates_for_game[0]["timestamp"].as_s
+          Log.trace &.emit "\tRemaining updates", game_id: game_id, number_of_updates: updates_for_game.size
+        end
 
         any_games_updated = true
       end
