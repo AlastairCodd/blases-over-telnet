@@ -108,6 +108,13 @@ class ChroniclerSource < Source
 
     if !@historic_sims.nil? && @historic_sims.not_nil!.size > 0
       next_sim_valid_from = Time::Format::ISO_8601_DATE_TIME.parse @historic_sims.not_nil![0]["validFrom"].as_s
+      Log.trace &.emit "considering sim", current_time: @current_time, current_max: max_time, sim_time: next_sim_valid_from
+      while next_sim_valid_from <= @current_time
+        @historic_sims.not_nil!.shift
+        next_sim_valid_from = Time::Format::ISO_8601_DATE_TIME.parse @historic_sims.not_nil![0]["validFrom"].as_s
+        Log.trace &.emit "considering sim", current_time: @current_time, current_max: max_time, sim_time: next_sim_valid_from
+      end
+
       if next_sim_valid_from < max_time && @current_time < next_sim_valid_from
         Log.trace &.emit "Updating max time to be sim time", current_max: max_time, new_max: next_sim_valid_from
         max_time = next_sim_valid_from
