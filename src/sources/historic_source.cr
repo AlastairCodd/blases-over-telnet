@@ -355,14 +355,23 @@ class ChroniclerSource < Source
   end
 
   def fetch_historic_sims : SimDataOverTime?
-    Log.trace &.emit "Fetching sim data", time: @current_time
-    sim_data_response = get_chron_versions "Sim", @current_time
+    Log.trace &.emit "Fetching sim data -- versions", time: @current_time
+    sim_versions_response = get_chron_versions "Sim", @current_time
 
-    if sim_data_response.nil?
+    if sim_versions_response.nil?
       return nil
     end
 
-    return sim_data_response.not_nil!.map { |sim_data| sim_data.as_h }
+    versions = sim_versions_response.not_nil!.map { |sim_data| sim_data.as_h }
+
+    Log.trace &.emit "Fetching sim data -- entity", time: @current_time
+    sim_entity_response = get_chron_entities "Sim", @current_time
+
+    if !sim_entity_response.nil?
+      versions.unshift sim_entity_response[0].as_h
+    end
+
+    return versions
   end
 
   def get_all_updates_for_all_games_for_day_and_push_to_historic_games(sim_id_yo : String, season : Int32, zero_indexed_day : Int32) : Nil
@@ -418,6 +427,31 @@ class ChroniclerSource < Source
       "after" => Time::Format::ISO_8601_DATE_TIME.format(from_time),
     })
     url.path = (Path.new(url.path) / "v2" / "versions").to_s
+
+    begin
+      response = HTTP::Client.get url
+      if response.success?
+        messages = JSON.parse response.body
+        return messages["items"].as_a
+      else
+        Log.error { "http request failed" }
+        Log.error { url }
+        Log.error { response.status_code }
+        return nil
+      end
+    rescue ex
+      Log.error(exception: ex) { }
+      return nil
+    end
+  end
+
+  def get_chron_entities(entity_type : String, at_time : Time) : Array(JSON::Any)?
+    url = URI.parse(ENV["CHRON_API_URL"])
+    url.query = URI::Params.encode({
+      "type" => entity_type,
+      "at"   => Time::Format::ISO_8601_DATE_TIME.format(at_time),
+    })
+    url.path = (Path.new(url.path) / "v2" / "entities").to_s
 
     begin
       response = HTTP::Client.get url
